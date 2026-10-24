@@ -15,11 +15,12 @@ except Exception:
     PIN = "1234"  # cámbialo aquí o en Secrets de Streamlit: PIN = "tu_pin"
 
 # Umbrales HEURÍSTICOS (no validados). Se pueden editar en la pestaña Resultados.
-U = {"omisiones": 8, "falsos_pos": 3, "recuerdo": 2, "instrucciones": 3, "comprension": 2, "mates": 4, "org_items": 4}
+U = {"omisiones": 8, "falsos_pos": 3, "recuerdo": 2, "instrucciones": 3, "comprension": 2, "mates": 4, "org_items": 4, "fatiga": 3}
 ULAB = {"omisiones": "Omisiones act. 1 (≥)", "falsos_pos": "Falsos positivos act. 1 (≥)",
         "recuerdo": "Palabras recordadas (≤)", "instrucciones": "Instrucciones 2B (≤)",
         "comprension": "Comprensión lectora (≤)", "mates": "Matemáticas (≤)",
-        "org_items": "Conductas de organización frecuentes (≥)"}
+        "org_items": "Conductas de organización frecuentes (≥)",
+        "fatiga": "Caída de aciertos filas 1-4 vs 5-8 (≥)"}
 
 FILAS = [f.split() for f in [
     "B A D C A F E A B C D A", "A C B D E A C F A D B E", "D E A B C D A E F B A C", "C A E D B A F C D A E B",
@@ -58,21 +59,34 @@ APOYOS = ["Instrucciones en pasos cortos", "Repetir o reformular instrucciones",
           "Revisión conjunta de tareas", "Lectura guiada o preguntas orales", "Práctica adicional en matemáticas",
           "Menos distractores en el aula", "Entrevista con familia", "Revisión de visión / audición"]
 AREAS = {
-    "Atención y funciones ejecutivas (explorar TDAH u otras causas)": (
-        "Entrevista con familia y docentes, escalas validadas con varios informantes y observación en más de un contexto. "
-        "Para considerar TDAH, los síntomas deben iniciar antes de los 12 años y verse en al menos dos ambientes.",
-        "sueño, ansiedad o ánimo, visión/audición, ausencias, estrés familiar, método de estudio"),
-    "Memoria verbal inmediata y seguimiento de instrucciones": (
-        "Prueba estandarizada de memoria de trabajo/verbal y revisión de la audición.",
-        "audición, ansiedad, idioma, distracciones durante la actividad"),
-    "Lectura, comprensión y escritura (explorar dificultad específica del aprendizaje)": (
-        "Valoración psicopedagógica con pruebas estandarizadas e historia escolar. La dificultad debe persistir pese a apoyos y práctica.",
-        "visión/audición, rezago escolar o ausencias, idioma, falta de práctica, ansiedad"),
-    "Razonamiento y cálculo matemático (explorar dificultad específica en matemáticas)": (
-        "Valoración psicopedagógica de cálculo y razonamiento, revisando el procedimiento y no solo el resultado.",
-        "ansiedad ante matemáticas, rezago escolar, instrucción previa, errores por falta de atención")}
+    "TDAH (presentación inatenta o hiperactiva-impulsiva)": (
+        "DSM-5: ≥6 síntomas de inatención y/o hiperactividad-impulsividad por ≥6 meses, inicio antes de los 12 años, en ≥2 contextos y con afectación funcional. Confirmar con entrevista, escalas con padres y docentes y observación.",
+        "sueño, ansiedad o ánimo, visión/audición, estrés familiar, método de estudio, dificultades del aprendizaje",
+        "Conners 3 (padres, docentes, autoinforme); prueba de ejecución continua (CPT); d2 (atención selectiva); Stroop; WISC-V: índices de Memoria de Trabajo y Velocidad de Procesamiento"),
+    "Dificultad específica del aprendizaje: lectura (dislexia)": (
+        "Evaluar precisión, fluidez y comprensión lectora. DSM-5: dificultad ≥6 meses pese a intervención, rendimiento muy por debajo de lo esperado para la edad, sin otra causa que lo explique.",
+        "visión/audición, rezago escolar o ausencias, idioma, discapacidad intelectual, falta de práctica",
+        "PROLEC-SE-R (lectura en secundaria); WIAT-III o Woodcock-Muñoz (lectura); WISC-V: Comprensión Verbal"),
+    "Dificultad específica del aprendizaje: expresión escrita (disgrafía/disortografía)": (
+        "Valorar ortografía, gramática, puntuación y claridad/organización del texto, y la grafía en una muestra manuscrita.",
+        "motricidad fina, visión, rezago, idioma, falta de práctica",
+        "PROESC (procesos de escritura); WIAT-III o Woodcock-Muñoz (expresión escrita); muestra manuscrita"),
+    "Dificultad específica del aprendizaje: matemáticas (discalculia)": (
+        "Valorar sentido numérico, memoria de operaciones, cálculo y razonamiento; revisar procedimientos y no solo resultados.",
+        "ansiedad ante matemáticas, rezago, instrucción previa, errores por inatención",
+        "WIAT-III o Woodcock-Muñoz (matemáticas); WISC-V: Razonamiento Fluido y Memoria de Trabajo"),
+    "Memoria verbal y procesamiento de instrucciones orales": (
+        "Prueba estandarizada de memoria de trabajo/verbal, audiometría y valoración del lenguaje.",
+        "audición, ansiedad, idioma, distracciones durante la actividad",
+        "WISC-V: Retención de Dígitos y Memoria de Trabajo; audiometría; valoración del lenguaje"),
+    "Funciones ejecutivas (planificación, organización, inhibición)": (
+        "Escalas de funciones ejecutivas con varios informantes y observación en tareas de varios pasos; hay solapamiento con TDAH.",
+        "sueño, estrés, ansiedad, ambiente de estudio",
+        "BRIEF-2 (padres, docentes, autoinforme); ENFEN (6 a 12 años); Stroop"),
+}
 
 S = st.session_state
+ZW = "\u200b"  # carácter invisible para que cada letra tenga una etiqueta única
 
 
 def mostrar(html, alto):  # st.iframe en versiones nuevas; components.html en las anteriores
@@ -129,7 +143,7 @@ with tab_ev:
         if not bloq:
             mostrar(cuenta(120 - (ahora - S["_t1"])), 50)
         for r, fila in enumerate(FILAS):
-            st.pills(f"Fila {r + 1}", list(range(12)), selection_mode="multi", format_func=lambda i, f=fila: f[i],
+            st.pills(f"Fila {r + 1}", [f"{c}{ZW * i}" for i, c in enumerate(fila)], selection_mode="multi",
                      key=f"w_r{r}", disabled=bloq, label_visibility="collapsed")
         if bloq:
             st.success("Actividad 1 terminada.")
@@ -142,7 +156,9 @@ with tab_ev:
     if st.button("🔊 Escuchar las palabras", disabled=S.get("_oyo", False)):
         S["_oyo"] = True
         mostrar(PAL_JS, 90)
-    st.text_area("Palabras que recuerdas", key="w_2a")
+        time.sleep(len(PALABRAS) * 1.5 + 2.5)  # el campo sigue bloqueado hasta que termina el audio
+        st.rerun()
+    st.text_area("Palabras que recuerdas (se habilita al terminar el audio)", key="w_2a", disabled=not S.get("_oyo"))
 
     st.header("Actividad 3. Comprensión lectora")
     st.info(TEXTO)
@@ -188,7 +204,7 @@ with tab_re:
                 U[k] = st.number_input(lab, 0, 25, U[k], key=f"u_{k}")
 
         # Act 1
-        sel = [S.get(f"w_r{r}") or [] for r in range(8)]
+        sel = [[x.count(ZW) for x in (S.get(f"w_r{r}") or [])] for r in range(8)]
         hits = [sum(FILAS[r][i] == "A" for i in s) for r, s in enumerate(sel)]
         fps = [len(s) - h for s, h in zip(sel, hits)]
         aciertos, falsos = sum(hits), sum(fps)
@@ -210,6 +226,7 @@ with tab_re:
 
         st.markdown("#### Verificación del profesional")
         st.markdown("**Actividad 2B (en papel):** marca las acciones ejecutadas correctamente")
+        b_ap = st.checkbox("Se aplicó la actividad 2B", key="v_bap")
         acciones_ok = [a for i, a in enumerate(ACCIONES) if st.checkbox(a, key=f"v_b{i}")]
         st.markdown("**Actividad 3:** sugerencia automática por palabras clave; corrige con tu criterio")
         compr_ok = []
@@ -247,34 +264,102 @@ with tab_re:
         st.write(txt4 or "_Sin respuesta_")
         st.markdown(f"**Actividad 6, respuestas abiertas.** Le ayuda: {S.get('w_ayuda') or '-'} · Le dificulta: {S.get('w_dif') or '-'}")
 
-        # Áreas a explorar
-        areas, nom = [], list(AREAS)
-        ind = []
-        if omisiones >= U["omisiones"] and "_t1" in S: ind.append(f"Atención visual: {omisiones} omisiones de 25")
-        if falsos >= U["falsos_pos"]: ind.append(f"Atención visual: {falsos} falsos positivos (posible actuar sin revisar)")
-        if len(recordadas) <= U["recuerdo"] and S.get("_oyo"): ind.append(f"Recuerdo inmediato bajo: {len(recordadas)}/5")
-        if len(org_alto) >= U["org_items"]: ind.append(f"Organización: {len(org_alto)} de 8 conductas frecuentes")
-        if len(ind) >= 2: areas.append((nom[0], ind))
-        ind = []
-        if len(recordadas) <= U["recuerdo"] and S.get("_oyo"): ind.append(f"Recuerdo de palabras: {len(recordadas)}/5")
-        if len(acciones_ok) <= U["instrucciones"] and acciones_ok: ind.append(f"Instrucciones de 5 pasos: {len(acciones_ok)}/5")
-        if len(ind) >= 2: areas.append((nom[1], ind))
-        ind = []
-        if len(compr_ok) <= U["comprension"]: ind.append(f"Comprensión lectora: {len(compr_ok)}/4")
-        if escr_flag: ind.append("Texto de la actividad 4 poco comprensible o desorganizado")
-        if ind: areas.append((nom[2], ind))
-        if sum(mates_ok) <= U["mates"]: areas.append((nom[3], [f"Matemáticas: {sum(mates_ok)}/8 correctas"]))
+        # ---- Perfil por dominios (referencia propia, no normativa) ----
+        t1s = S["_f1"] - S["_t1"] if "_f1" in S else None
+        h1, h2 = sum(hits[:4]), sum(hits[4:])
+        suma = lambda ids: sum(mates_ok[i] for i in ids)
+        calc, razon = suma([1, 2, 4, 7]), suma([0, 3, 5, 6])
+        vals = [v for v in org.values() if v is not None]
+        hizo3 = any(S.get(f"w_c{i}", "").strip() for i in range(4))
+        hizo5 = any(S.get(f"w_m{i}", "").strip() for i in range(8))
+        dom = {"Atención sostenida (eficiencia)": max(0, (aciertos - falsos) / 25 * 100) if "_t1" in S else None,
+               "Memoria verbal inmediata": len(recordadas) / 5 * 100 if S.get("_oyo") else None,
+               "Seguimiento de instrucciones": len(acciones_ok) / 5 * 100 if b_ap else None,
+               "Comprensión lectora": len(compr_ok) / 4 * 100 if hizo3 else None,
+               "Cálculo básico": calc / 4 * 100 if hizo5 else None,
+               "Razonamiento matemático": razon / 4 * 100 if hizo5 else None,
+               "Autorregulación (autoinforme)": 100 - sum(vals) / (3 * len(vals)) * 100 if vals else None}
+        dd = pd.DataFrame({"Dominio": list(dom), "Puntaje %": [None if v is None else round(v) for v in dom.values()]})
+        dd["Lectura descriptiva"] = dd["Puntaje %"].map(
+            lambda v: "No evaluado" if pd.isna(v) else "Bajo" if v < 40 else "Medio" if v < 70 else "Adecuado")
+        st.markdown("#### Perfil por dominios")
+        st.caption("Porcentaje de logro con referencia propia y no normativa (<40 bajo, 40-69 medio, ≥70 adecuado). "
+                   "Para valores estandarizados usa las pruebas sugeridas más abajo.")
+        st.dataframe(dd, hide_index=True)
+        if dd["Puntaje %"].notna().any():
+            st.bar_chart(dd.dropna().set_index("Dominio")["Puntaje %"])
+        if "_t1" in S:
+            m = st.columns(4)
+            m[0].metric("Omisiones", f"{omisiones / 25:.0%}")
+            m[1].metric("Falsos positivos", falsos)
+            m[2].metric("Aciertos filas 1-4 vs 5-8", f"{h1} vs {h2}")
+            m[3].metric("Tiempo", t1)
 
-        st.markdown("#### Áreas a explorar")
-        st.caption("Hipótesis de trabajo para tu criterio profesional; el diagnóstico es del especialista.")
-        if areas:
-            for n, indicios in areas:
-                with st.expander(n, expanded=True):
-                    st.markdown("**Por qué aparece:**\n" + "\n".join(f"- {x}" for x in indicios))
-                    st.markdown(f"**Cómo confirmar o descartar:** {AREAS[n][0]}")
-                    st.markdown(f"**Descartar primero:** {AREAS[n][1]}")
-        else:
-            st.write("Sin señales que cumplan los criterios. Eso no descarta nada.")
+        # ---- Pistas en respuestas abiertas ----
+        abiertas = norm(f"{S.get('w_ayuda', '')} {S.get('w_dif', '')}")
+        CLAVES = {"Emocional / social": ["miedo", "nervio", "ansied", "trist", "llor", "enoj", "burla", "bullying", "acoso", "estres", "preocup"],
+                  "Sueño / cansancio": ["sueno", "cansad", "dormir"],
+                  "Atención / ambiente": ["distra", "ruido", "platic", "celular", "aburr"],
+                  "Comprensión / ritmo": ["no entiendo", "no comprendo", "muy rapido", "me cuesta leer", "no puedo leer"]}
+        pistas = {k: [w for w in v if w in abiertas] for k, v in CLAVES.items()}
+        pistas = {k: v for k, v in pistas.items() if v}
+
+        # ---- Indicios por área ----
+        K = list(AREAS)
+        ind = {n: [] for n in K}
+        if "_t1" in S:
+            if omisiones >= U["omisiones"]: ind[K[0]].append(f"Omisiones: {omisiones}/25")
+            if falsos >= U["falsos_pos"]: ind[K[0]].append(f"Falsos positivos: {falsos} (posible impulsividad)")
+            if h1 - h2 >= U["fatiga"]: ind[K[0]].append(f"El desempeño cae en la segunda mitad ({h1} vs {h2} aciertos)")
+            if t1s is not None and t1s < 60 and omisiones >= U["omisiones"]:
+                ind[K[0]].append(f"Terminó en {t1s:.0f} s con muchas omisiones (posible impulsividad)")
+        if S.get("_oyo") and len(recordadas) <= U["recuerdo"]:
+            ind[K[0]].append(f"Recuerdo inmediato bajo: {len(recordadas)}/5")
+            ind[K[4]].append(f"Recuerdo de palabras: {len(recordadas)}/5")
+        intr = [t for t in extras if len(t) >= 4]
+        if len(intr) >= 2: ind[K[4]].append(f"Intrusiones (palabras no presentadas): {', '.join(intr)}")
+        if b_ap and len(acciones_ok) <= U["instrucciones"]: ind[K[4]].append(f"Instrucciones de 5 pasos: {len(acciones_ok)}/5")
+        if len(org_alto) >= U["org_items"]: ind[K[0]].append(f"Autoinforme: {len(org_alto)} de 8 conductas de organización frecuentes")
+        GRUPOS = {"Planificación y organización": [0, 3, 5], "Persistencia e iniciativa": [1, 2],
+                  "Inhibición y monitoreo": [4, 6], "Flexibilidad al retomar tareas": [7]}
+        for g, ids in GRUPOS.items():
+            vs = [org[ORG[i]] for i in ids if org[ORG[i]] is not None]
+            if vs and sum(vs) / len(vs) >= 2: ind[K[5]].append(f"{g}: promedio {sum(vs) / len(vs):.1f} de 3")
+        if hizo3 and len(compr_ok) <= U["comprension"]: ind[K[1]].append(f"Comprensión lectora: {len(compr_ok)}/4")
+        if sum(not S.get(f"w_c{i}", "").strip() for i in range(4)) >= 2 and hizo3:
+            ind[K[1]].append("Dejó sin respuesta 2 o más preguntas de comprensión")
+        if "Comprensión / ritmo" in pistas: ind[K[1]].append("Menciona dificultad para entender o leer en sus respuestas abiertas")
+        pal4 = re.findall(r"[a-zñ]+", norm(txt4))
+        ttr = len(set(pal4)) / len(pal4) if pal4 else 0
+        if txt4.strip():
+            if n_or < 5: ind[K[2]].append(f"Texto breve: {n_or} oraciones (se pedían 5 a 8)")
+            if len(pal4) >= 30 and ttr < 0.5: ind[K[2]].append(f"Vocabulario repetitivo (diversidad léxica {ttr:.2f})")
+            if len(pal4) / max(n_or, 1) > 30: ind[K[2]].append(f"Oraciones muy largas o sin puntuar ({len(pal4) / max(n_or, 1):.0f} palabras por oración)")
+        if escr_flag: ind[K[2]].append("Texto poco comprensible o desorganizado (según el profesional)")
+        if hizo5:
+            if sum(mates_ok) <= U["mates"]: ind[K[3]].append(f"Matemáticas: {sum(mates_ok)}/8 correctas")
+            if calc <= 1: ind[K[3]].append(f"Cálculo básico (÷, ×, +): {calc}/4")
+            if razon <= 1: ind[K[3]].append(f"Razonamiento y patrones: {razon}/4")
+        niv = lambda n: ["Sin indicios", "Débil", "Moderado", "Fuerte"][min(len(ind[n]), 3)]
+        areas = [(n, ind[n]) for n in K if ind[n]]
+
+        st.markdown("#### Indicios por área")
+        st.caption("Hipótesis de trabajo para tu criterio profesional, no un diagnóstico. El nivel solo refleja cuántos indicios coinciden "
+                   "(1 débil, 2 moderado, 3 o más fuerte). Este cuadernillo no evalúa ansiedad, depresión, TEA, lenguaje ni capacidad intelectual.")
+        st.table(pd.DataFrame({"Área": K, "Indicio": [niv(n) for n in K], "Coincidencias": [len(ind[n]) for n in K]}))
+        for n, indicios in areas:
+            with st.expander(f"{n} · {niv(n)}", expanded=len(indicios) >= 2):
+                st.markdown("**Por qué aparece:**\n" + "\n".join(f"- {x}" for x in indicios))
+                st.markdown(f"**Criterios y cómo confirmar:** {AREAS[n][0]}")
+                st.markdown(f"**Descartar primero:** {AREAS[n][1]}")
+                st.markdown(f"**Valores/pruebas que puedes aplicar:** {AREAS[n][2]}")
+        if pistas:
+            st.markdown("**Pistas en sus respuestas abiertas** (para explorar en entrevista)")
+            for k, v in pistas.items():
+                st.write(f"- {k}: " + ", ".join(v))
+            if "Emocional / social" in pistas:
+                st.caption("Para lo emocional y conductual se sugiere SDQ o CBCL con padres y docentes.")
+        st.caption("Verifica edad, baremos para México y licencias de cada prueba antes de usarla.")
 
         st.markdown("#### Observaciones y apoyos")
         obs = st.text_area("Observaciones del aplicador (atención, conducta, fortalezas, factores que influyeron)", key="v_obs")
@@ -282,11 +367,12 @@ with tab_re:
 
         L = ["# Reporte de exploración educativa", f"Nombre: {nombre} · Edad: {edad} · Fecha: {fecha} · Aplicador(a): {aplic}",
              "", "## Resultados"] + [f"- **{r.Actividad}**: {r.Resultado}" for r in resumen.itertuples()]
+        L += ["", "## Perfil por dominios (referencia no normativa)"] + [f"- {r['Dominio']}: {r['Puntaje %']} ({r['Lectura descriptiva']})" for _, r in dd.iterrows()]
         L += ["", "## Actividad 4", txt4 or "-", "", "## Actividad 6"] + [f"- {t}: {v}" for t, v in org.items()]
         L += ["", f"Le ayuda: {S.get('w_ayuda') or '-'}", f"Le dificulta: {S.get('w_dif') or '-'}", "", "## Observaciones", obs or "-", "",
               "## Áreas a explorar (hipótesis de trabajo)"]
         for n, indicios in areas:
-            L += [f"### {n}"] + [f"- {x}" for x in indicios] + [f"Confirmar/descartar: {AREAS[n][0]}", f"Descartar primero: {AREAS[n][1]}", ""]
+            L += [f"### {n} (indicio {niv(n).lower()})"] + [f"- {x}" for x in indicios] + [f"Criterios: {AREAS[n][0]}", f"Descartar primero: {AREAS[n][1]}", f"Pruebas sugeridas: {AREAS[n][2]}", ""]
         L += ["## Apoyos"] + ([f"- {a}" for a in apoyos] or ["-"])
         fila = {"nombre": nombre, "edad": edad, "fecha": str(fecha), "a1_aciertos": aciertos, "a1_omisiones": omisiones,
                 "a1_falsos_positivos": falsos, "a2a": len(recordadas), "a2b": len(acciones_ok), "a3": len(compr_ok),
