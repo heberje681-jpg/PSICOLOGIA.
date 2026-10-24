@@ -20,7 +20,7 @@ ULAB = {"omisiones": "Omisiones act. 1 (≥)", "falsos_pos": "Falsos positivos a
         "recuerdo": "Palabras recordadas (≤)", "instrucciones": "Instrucciones 2B (≤)",
         "comprension": "Comprensión lectora (≤)", "mates": "Matemáticas (≤)",
         "org_items": "Conductas de organización frecuentes (≥)",
-        "fatiga": "Caída de aciertos filas 1-4 vs 5-8 (≥)"}
+        "fatiga": "Caída de aciertos 1ª vs 2ª mitad (≥)"}
 
 FILAS = [f.split() for f in [
     "B A D C A F E A B C D A", "A C B D E A C F A D B E", "D E A B C D A E F B A C", "C A E D B A F C D A E B",
@@ -60,7 +60,7 @@ APOYOS = ["Instrucciones en pasos cortos", "Repetir o reformular instrucciones",
           "Menos distractores en el aula", "Entrevista con familia", "Revisión de visión / audición"]
 AREAS = {
     "TDAH (presentación inatenta o hiperactiva-impulsiva)": (
-        "DSM-5: ≥6 síntomas de inatención y/o hiperactividad-impulsividad por ≥6 meses, inicio antes de los 12 años, en ≥2 contextos y con afectación funcional. Confirmar con entrevista, escalas con padres y docentes y observación.",
+        "DSM-5: ≥6 síntomas (≥5 desde los 17 años) de inatención y/o hiperactividad-impulsividad por ≥6 meses, inicio antes de los 12 años, en ≥2 contextos y con afectación funcional. Confirmar con entrevista, escalas con padres y docentes y observación.",
         "sueño, ansiedad o ánimo, visión/audición, estrés familiar, método de estudio, dificultades del aprendizaje",
         "Conners 3 (padres, docentes, autoinforme); prueba de ejecución continua (CPT); d2 (atención selectiva); Stroop; WISC-V: índices de Memoria de Trabajo y Velocidad de Procesamiento"),
     "Dificultad específica del aprendizaje: lectura (dislexia)": (
@@ -101,7 +101,8 @@ def norm(t):
 
 
 def acierta(texto, esperado):
-    return re.findall(r"\d+(?:[.:]\d+)?", (texto or "").replace(":", ".")) == esperado
+    toks = re.findall(r"\d+(?:[.:]\d+)?", (texto or "").replace(":", "."))
+    return [t[:-3] if t.endswith(".00") else t for t in toks] == esperado
 
 
 def cuenta(s):
@@ -111,11 +112,113 @@ def cuenta(s):
             "s--;if(s>=-1)setTimeout(f,1000)}f()</script>")
 
 
-PAL_JS = (f"<div id=p style='font:700 40px sans-serif;color:#fff;background:#2b6cb0;border-radius:10px;padding:12px;"
+def pal_js(PALABRAS):
+    return (f"<div id=p style='font:700 40px sans-serif;color:#fff;background:#2b6cb0;border-radius:10px;padding:12px;"
           f"text-align:center;min-height:56px'></div><script>const w={PALABRAS};let i=0;const p=document.getElementById('p');"
           "function n(){if(i>=w.length){p.textContent='';return}p.textContent=w[i];"
           "try{const u=new SpeechSynthesisUtterance(w[i]);u.lang='es-MX';speechSynthesis.speak(u)}catch(e){}"
           "i++;setTimeout(n,1500)}n()</script>")
+
+
+def _r(*xs):
+    return [x.split() for x in xs]
+
+
+_IGNORAR = "sueño, ansiedad o ánimo, visión/audición, estrés, método de estudio, otras dificultades del aprendizaje"
+VERS = {
+    "ninos": {
+        "nombre": "Niñez (menores de 12 años)", "tiempo": 90, "orac": (3, 5),
+        "filas": _r("B A D A F E A C B D", "A C E B A D F A C B", "D F A B C A E D A F",
+                    "E B D A C F A B D A", "C A F D B A E C A D", "F A B E A C D A B E"),
+        "palabras": ["perro", "pelota", "manzana", "silla", "nube"],
+        "acciones": ["Nombre arriba", "Círculo abajo a la derecha", "Número 3 dentro del círculo",
+                     "Nombre subrayado", "CASA debajo del círculo"],
+        "instr2b": "Escribe tu nombre arriba de la hoja. Dibuja un círculo abajo, a la derecha. Escribe el número 3 dentro del círculo. "
+                   "Subraya tu nombre. Escribe la palabra CASA debajo del círculo.",
+        "texto": ("**EL GATO PELUSA.** Ana tiene un gato llamado Pelusa. Todas las mañanas, Pelusa se sube a la ventana para ver "
+                  "a los pájaros. Un día, Ana olvidó cerrar la puerta y Pelusa salió al patio. Ana la buscó por todos lados hasta "
+                  "que la encontró durmiendo debajo de un árbol. Desde ese día, Ana siempre revisa la puerta antes de salir."),
+        "comp": [("¿Cómo se llama el gato?", "Pelusa", ["pelusa"]),
+                 ("¿Qué hacía Pelusa por las mañanas?", "se subía a la ventana a ver los pájaros", ["ventana", "pajaro"]),
+                 ("¿Qué olvidó hacer Ana?", "cerrar la puerta", ["puerta", "cerrar"]),
+                 ("¿Qué hace Ana desde ese día?", "revisa la puerta antes de salir", ["revis", "antes", "siempre"])],
+        "mates": [("Completa la secuencia: 2, 4, 6, 8, ___", ["10"], "10"), ("¿Cuánto es 15 − 7?", ["8"], "8"),
+                  ("Si una paleta cuesta $5, ¿cuánto cuestan 3 paletas?", ["15"], "15"),
+                  ("¿Qué número falta? 10, 20, 30, ___", ["40"], "40"),
+                  ("Tenías 12 canicas y ganaste 9. ¿Cuántas tienes ahora?", ["21"], "21"),
+                  ("Son las 3:00 y pasa 1 hora. ¿Qué hora es?", ["4"], "4:00"),
+                  ("Ordena de menor a mayor: 9, 3, 6", ["3", "6", "9"], "3, 6, 9"),
+                  ("Si hay 3 bolsas con 4 dulces cada una, ¿cuántos dulces hay?", ["12"], "12")],
+        "org": ["Se me olvida llevar mis cosas a la escuela.", "Empiezo mi tarea, pero no la termino.",
+                "Necesito que me recuerden varias veces lo que debo hacer.", "Me cuesta hacer actividades que tienen varios pasos.",
+                "Entrego trabajos incompletos porque no leo bien las instrucciones.",
+                "Me cuesta saber cuánto tiempo tardo en hacer una tarea.", "Hago las cosas muy rápido sin pensar.",
+                "Me cuesta volver a mi tarea cuando me interrumpen."],
+        "p_orac": "Escribe de 3 a 5 oraciones sobre tu mejor día.",
+        "p_ayuda": "¿Qué te ayuda a concentrarte o a terminar tus tareas?",
+        "p_dif": "¿Hay algo que te cuesta trabajo en la escuela y que quisieras que tu maestro supiera?",
+        "pruebas": ["Conners 3 (padres y docentes; 6 a 18 años); prueba de ejecución continua (CPT); d2 (desde 8 años); Stroop infantil; WISC-V: Memoria de Trabajo y Velocidad de Procesamiento",
+                    "PROLEC-R (lectura, 6 a 12 años); WIAT-III o Woodcock-Muñoz (lectura); WISC-V: Comprensión Verbal",
+                    "PROESC (escritura, 8 a 15 años); WIAT-III o Woodcock-Muñoz (expresión escrita); muestra manuscrita",
+                    "WIAT-III o Woodcock-Muñoz (matemáticas); TEDI-MATH (hasta 8 años); WISC-V: Razonamiento Fluido y Memoria de Trabajo",
+                    "WISC-V: Retención de Dígitos y Memoria de Trabajo; audiometría; valoración del lenguaje",
+                    "BRIEF-2 (padres y docentes); ENFEN (6 a 12 años); Stroop infantil"]},
+    "adol": {
+        "nombre": "Adolescencia (12 a 15 años)", "tiempo": 120, "orac": (5, 8), "filas": FILAS, "palabras": PALABRAS,
+        "acciones": ACCIONES, "texto": TEXTO, "comp": COMP, "mates": MATES, "org": ORG,
+        "instr2b": "Escribe tu nombre en la parte superior de la hoja. Dibuja un círculo en la esquina inferior derecha. Escribe el número 8 "
+                   "dentro del círculo. Subraya tu nombre. Escribe la palabra ESCUELA debajo del círculo.",
+        "p_orac": "Escribe un texto de 5 a 8 oraciones sobre una situación en la que tuviste que resolver un problema.",
+        "p_ayuda": "¿Qué te ayuda a concentrarte o terminar tus tareas?",
+        "p_dif": "¿Hay algo que te dificulte aprender o participar en clase y que quisieras que la escuela supiera?",
+        "pruebas": ["Conners 3 (padres, docentes, autoinforme); prueba de ejecución continua (CPT); d2 (atención selectiva); Stroop; WISC-V: Memoria de Trabajo y Velocidad de Procesamiento",
+                    "PROLEC-SE-R (lectura en secundaria); WIAT-III o Woodcock-Muñoz (lectura); WISC-V: Comprensión Verbal",
+                    "PROESC (procesos de escritura); WIAT-III o Woodcock-Muñoz (expresión escrita); muestra manuscrita",
+                    "WIAT-III o Woodcock-Muñoz (matemáticas); WISC-V: Razonamiento Fluido y Memoria de Trabajo",
+                    "WISC-V: Retención de Dígitos y Memoria de Trabajo; audiometría; valoración del lenguaje",
+                    "BRIEF-2 (padres, docentes, autoinforme); ENFEN (6 a 12 años); Stroop"]},
+    "adulto": {
+        "nombre": "Adultos (16 años o más)", "tiempo": 120, "orac": (8, 12),
+        "filas": _r("V A H R K A N X V A R H K A", "K H A V R N A H X A K V R N", "N R V A H K X A R V A H N K",
+                    "H A K N V R A X H K A V N R", "R V A X H A N K V R A H X A", "X K N A R V H A K X N A V H",
+                    "A H R V X K A N H R A V K X", "V N K H A R X V A H K A R N"),
+        "palabras": ["reloj", "puente", "naranja", "cuaderno", "cortina"],
+        "acciones": ["Nombre arriba", "Cuadrado abajo a la izquierda", "Número 7 dentro del cuadrado",
+                     "Nombre subrayado", "TRABAJO encima del cuadrado"],
+        "instr2b": "Escribe tu nombre en la parte superior de la hoja. Dibuja un cuadrado en la esquina inferior izquierda. Escribe el número 7 "
+                   "dentro del cuadrado. Subraya tu nombre. Escribe la palabra TRABAJO encima del cuadrado.",
+        "texto": ("**EL CAMBIO DE HORARIO.** Una empresa mediana decidió cambiar el horario de trabajo para reducir el tiempo que sus "
+                  "empleados pasaban en el tráfico. Antes de aplicar la medida, la gerencia consultó a los equipos y comparó los costos. "
+                  "Durante el primer mes, la productividad bajó porque varios trabajadores no lograron adaptar sus rutinas familiares. "
+                  "La empresa revisó las quejas, ajustó los horarios de dos áreas y ofreció trabajar un día desde casa. Tras tres meses, "
+                  "la rotación de personal disminuyó y los empleados reportaron menos cansancio. La gerencia concluyó que los cambios "
+                  "funcionan mejor cuando se revisan con los afectados y se corrigen a tiempo."),
+        "comp": [("¿Para qué decidió la empresa cambiar el horario?", "reducir el tiempo en el tráfico", ["trafico", "traslado", "transporte"]),
+                 ("¿Por qué bajó la productividad el primer mes?", "varios trabajadores no lograron adaptar sus rutinas familiares", ["rutina", "adapt", "familia"]),
+                 ("¿Qué medidas tomó la empresa tras revisar las quejas?", "ajustó horarios de dos áreas y permitió un día desde casa", ["ajust", "casa", "home"]),
+                 ("¿Qué concluyó la gerencia?", "los cambios funcionan mejor si se revisan con los afectados y se corrigen a tiempo", ["revis", "corrig", "afectad", "consult"])],
+        "mates": [("Completa la secuencia: 4, 9, 16, 25, ___", ["36"], "36"), ("Calcula el 15% de 240", ["36"], "36"),
+                  ("Un artículo cuesta $850 y tiene 20% de descuento. ¿Cuánto pagas?", ["680"], "680"),
+                  ("¿Qué número sigue? 2, 6, 18, 54, ___", ["162"], "162"),
+                  ("Compraste tres productos de $128, $245 y $87. ¿Cuánto gastaste en total?", ["460"], "460"),
+                  ("Una reunión empieza a las 9:40 y dura 1 hora con 35 minutos. ¿A qué hora termina?", ["11.15"], "11:15"),
+                  ("Ordena de menor a mayor: 0.75, 0.5, 0.125", ["0.125", "0.5", "0.75"], "0.125, 0.5, 0.75"),
+                  ("Si 7 personas pagan $1,260 en total por partes iguales, ¿cuánto paga cada una?", ["180"], "180")],
+        "org": ["Olvido qué materiales o documentos necesito llevar.", "Comienzo tareas, pero me cuesta terminarlas.",
+                "Necesito recordatorios frecuentes para cumplir mis pendientes.", "Me cuesta organizar actividades de varios pasos.",
+                "Entrego trabajos incompletos por no revisar bien las instrucciones.",
+                "Me cuesta calcular cuánto tiempo necesito para una tarea.",
+                "Actúo o respondo antes de pensar en las consecuencias.", "Me cuesta retomar una actividad después de una interrupción."],
+        "p_orac": "Escribe un texto de 8 a 12 oraciones sobre una situación reciente de estudio, trabajo o vida diaria en la que tuviste que resolver un problema.",
+        "p_ayuda": "¿Qué te ayuda a concentrarte o a terminar tus pendientes?",
+        "p_dif": "¿Hay algo que dificulte tu estudio o trabajo y que quisieras mencionar?",
+        "pruebas": ["ASRS y CAARS (18 años o más; Conners 3 para 16 y 17 años); CPT; d2; Stroop; WAIS-IV: Memoria de Trabajo y Velocidad de Procesamiento",
+                    "WIAT-III o Woodcock-Muñoz (lectura); WAIS-IV: Comprensión Verbal",
+                    "WIAT-III o Woodcock-Muñoz (expresión escrita); muestra de escritura",
+                    "WIAT-III o Woodcock-Muñoz (matemáticas); WAIS-IV: Razonamiento Matricial y Aritmética",
+                    "WAIS-IV: Retención de Dígitos y Memoria de Trabajo; audiometría; valoración del lenguaje",
+                    "BRIEF-A (18 años o más; BRIEF-2 para 16 y 17); Stroop; Torre de Londres"]},
+}
 
 tab_ev, tab_re = st.tabs(["📝 Evaluación", "📊 Resultados"])
 
@@ -125,23 +228,34 @@ with tab_ev:
     st.caption("No es un examen: si no sabes una respuesta, déjala en blanco y continúa.")
     c1, c2 = st.columns(2)
     c1.text_input("Nombre", key="w_nombre")
-    c2.number_input("Edad", 3, 99, 12, key="w_edad")
+    edad_in = c2.number_input("Edad", 3, 99, 12, key="w_edad")
     c1.date_input("Fecha de aplicación", key="w_fecha")
     c2.text_input("Aplicador(a)", key="w_aplicador")
+    clave = "ninos" if edad_in < 12 else "adol" if edad_in < 16 else "adulto"
+    if S.get("_ver") != clave:  # al cambiar de versión se borran las respuestas anteriores
+        pref = ("w_r", "w_c", "w_m", "w_o", "w_2a", "w_a4", "w_ayuda", "w_dif", "v_")
+        for k in [k for k in S if k.startswith(pref) or k in ("_t1", "_f1", "_oyo")]:
+            del S[k]
+        S["_ver"] = clave
+    V = VERS[clave]
+    FILAS, PALABRAS, ACCIONES, TEXTO, COMP, MATES, ORG = (V[k] for k in ("filas", "palabras", "acciones", "texto", "comp", "mates", "org"))
+    TIEMPO1, (ORMIN, ORMAX) = V["tiempo"], V["orac"]
+    NF, NA = len(FILAS), sum(r.count("A") for r in FILAS)
+    st.caption(f"Versión: {V['nombre']}")
 
     st.header("Actividad 1. Atención visual")
-    st.write("Durante 2 minutos, **toca todas las letras A** que encuentres para tacharlas. No toques ninguna otra letra. "
+    st.write(f"Durante {TIEMPO1 / 60:g} minutos, **toca todas las letras A** que encuentres para tacharlas. No toques ninguna otra letra. "
              "Trabaja de izquierda a derecha y de arriba hacia abajo.")
-    if st.button("▶ Comenzar (2 minutos)", disabled="_t1" in S):
+    if st.button(f"▶ Comenzar ({TIEMPO1 / 60:g} minutos)", disabled="_t1" in S):
         S["_t1"] = time.time()
         st.rerun()
     if "_t1" in S:
         ahora = time.time()
-        if "_f1" not in S and ahora - S["_t1"] >= 120:
-            S["_f1"] = S["_t1"] + 120
+        if "_f1" not in S and ahora - S["_t1"] >= TIEMPO1:
+            S["_f1"] = S["_t1"] + TIEMPO1
         bloq = "_f1" in S
         if not bloq:
-            mostrar(cuenta(120 - (ahora - S["_t1"])), 50)
+            mostrar(cuenta(TIEMPO1 - (ahora - S["_t1"])), 50)
         for r, fila in enumerate(FILAS):
             st.pills(f"Fila {r + 1}", [f"{c}{ZW * i}" for i, c in enumerate(fila)], selection_mode="multi",
                      key=f"w_r{r}", disabled=bloq, label_visibility="collapsed")
@@ -155,7 +269,7 @@ with tab_ev:
     st.write("Presiona el botón **una sola vez** y presta atención a las palabras. Después escribe todas las que recuerdes, en cualquier orden.")
     if st.button("🔊 Escuchar las palabras", disabled=S.get("_oyo", False)):
         S["_oyo"] = True
-        mostrar(PAL_JS, 90)
+        mostrar(pal_js(PALABRAS), 90)
         time.sleep(len(PALABRAS) * 1.5 + 2.5)  # el campo sigue bloqueado hasta que termina el audio
         st.rerun()
     st.text_area("Palabras que recuerdas (se habilita al terminar el audio)", key="w_2a", disabled=not S.get("_oyo"))
@@ -166,7 +280,7 @@ with tab_ev:
         st.text_area(f"{i + 1}. {q}", key=f"w_c{i}")
 
     st.header("Actividad 4. Expresión escrita")
-    st.text_area("Escribe un texto de 5 a 8 oraciones sobre una situación en la que tuviste que resolver un problema. "
+    st.text_area(V["p_orac"] + " "
                  "Explica qué ocurrió, qué hiciste y cómo terminó.", height=220, key="w_a4")
 
     st.header("Actividad 5. Razonamiento y matemáticas")
@@ -178,8 +292,8 @@ with tab_ev:
     st.caption("Piensa en lo que te sucede normalmente durante las últimas cuatro semanas.")
     for i, t in enumerate(ORG):
         st.radio(t, list(NIV), index=None, format_func=lambda v: f"{v} · {NIV[v]}", horizontal=True, key=f"w_o{i}")
-    st.text_area("¿Qué te ayuda a concentrarte o terminar tus tareas?", key="w_ayuda")
-    st.text_area("¿Hay algo que te dificulte aprender o participar en clase y que quisieras que la escuela supiera?", key="w_dif")
+    st.text_area(V["p_ayuda"], key="w_ayuda")
+    st.text_area(V["p_dif"], key="w_dif")
     if st.button("✅ Terminé la evaluación", type="primary"):
         st.success("¡Gracias por participar! Avisa a tu aplicador(a).")
 
@@ -197,18 +311,18 @@ with tab_re:
             S["_ok"] = False
             st.rerun()
         nombre, edad, fecha, aplic = S.get("w_nombre", ""), S.get("w_edad", ""), S.get("w_fecha", ""), S.get("w_aplicador", "")
-        st.subheader(f"{nombre or 'Sin nombre'} · {edad} años")
+        st.subheader(f"{nombre or 'Sin nombre'} · {edad} años · {V['nombre']}")
         st.caption(f"Fecha: {fecha} · Aplicador(a): {aplic or '-'}")
         with st.expander("⚙️ Umbrales de las áreas a explorar"):
             for k, lab in ULAB.items():
                 U[k] = st.number_input(lab, 0, 25, U[k], key=f"u_{k}")
 
         # Act 1
-        sel = [[x.count(ZW) for x in (S.get(f"w_r{r}") or [])] for r in range(8)]
+        sel = [[x.count(ZW) for x in (S.get(f"w_r{r}") or [])] for r in range(NF)]
         hits = [sum(FILAS[r][i] == "A" for i in s) for r, s in enumerate(sel)]
         fps = [len(s) - h for s, h in zip(sel, hits)]
         aciertos, falsos = sum(hits), sum(fps)
-        omisiones = 25 - aciertos
+        omisiones = NA - aciertos
         t1 = f"{S['_f1'] - S['_t1']:.0f} s" if "_f1" in S else "no realizada"
         # Act 2A
         toks = list(dict.fromkeys(re.findall(r"[a-z]+", norm(S.get("w_2a", "")))))
@@ -226,6 +340,7 @@ with tab_re:
 
         st.markdown("#### Verificación del profesional")
         st.markdown("**Actividad 2B (en papel):** marca las acciones ejecutadas correctamente")
+        st.caption("Instrucciones de la 2B (leer una sola vez): " + V["instr2b"])
         b_ap = st.checkbox("Se aplicó la actividad 2B", key="v_bap")
         acciones_ok = [a for i, a in enumerate(ACCIONES) if st.checkbox(a, key=f"v_b{i}")]
         st.markdown("**Actividad 3:** sugerencia automática por palabras clave; corrige con tu criterio")
@@ -239,7 +354,7 @@ with tab_re:
         escr_flag = st.checkbox("Actividad 4: texto poco comprensible o muy desorganizado", key="v_escr")
 
         resumen = pd.DataFrame([
-            ["1. Atención visual", f"{aciertos}/25 aciertos · {omisiones} omisiones · {falsos} falsos positivos · {t1}"],
+            ["1. Atención visual", f"{aciertos}/{NA} aciertos · {omisiones} omisiones · {falsos} falsos positivos · {t1}"],
             ["2A. Recuerdo inmediato", f"{len(recordadas)}/5" + (f" · otras palabras: {', '.join(extras)}" if extras else "")],
             ["2B. Instrucciones", f"{len(acciones_ok)}/5"],
             ["3. Comprensión lectora", f"{len(compr_ok)}/4"],
@@ -249,30 +364,31 @@ with tab_re:
         st.markdown("#### Resumen")
         st.table(resumen)
         st.markdown("**Porcentaje logrado por actividad**")
-        st.bar_chart(pd.DataFrame({"%": [aciertos / 25 * 100, len(recordadas) / 5 * 100, len(acciones_ok) / 5 * 100,
+        st.bar_chart(pd.DataFrame({"%": [aciertos / NA * 100, len(recordadas) / 5 * 100, len(acciones_ok) / 5 * 100,
                                           len(compr_ok) / 4 * 100, sum(mates_ok) / 8 * 100]},
                                   index=["1 Atención", "2A Recuerdo", "2B Instrucciones", "3 Comprensión", "5 Matemáticas"]))
-        st.markdown("**Actividad 1: aciertos y falsos positivos por fila** (cada fila tiene 3 a 4 letras A)")
-        st.bar_chart(pd.DataFrame({"Aciertos": hits, "Falsos positivos": fps}, index=[f"Fila {r + 1}" for r in range(8)]))
+        st.markdown(f"**Actividad 1: aciertos y falsos positivos por fila** (en total hay {NA} letras A)")
+        st.bar_chart(pd.DataFrame({"Aciertos": hits, "Falsos positivos": fps}, index=[f"Fila {r + 1}" for r in range(NF)]))
         st.markdown("**Actividad 6: frecuencia por conducta (0 a 3)**")
         st.bar_chart(pd.DataFrame({"Nivel": [v if v is not None else 0 for v in org.values()]}, index=ORGC))
         st.markdown("**Actividad 5: respuestas**")
         st.dataframe(pd.DataFrame({"Pregunta": [m[0] for m in MATES], "Respuesta": [S.get(f"w_m{i}", "") for i in range(8)],
                                    "Clave": [m[2] for m in MATES], "✓": ["✔" if o else "✘" for o in mates_ok]}),
                      hide_index=True)
-        st.markdown("**Actividad 4: texto del estudiante** (se esperan 5 a 8 oraciones)")
+        st.markdown(f"**Actividad 4: texto del estudiante** (se esperan {ORMIN} a {ORMAX} oraciones)")
         st.write(txt4 or "_Sin respuesta_")
         st.markdown(f"**Actividad 6, respuestas abiertas.** Le ayuda: {S.get('w_ayuda') or '-'} · Le dificulta: {S.get('w_dif') or '-'}")
 
         # ---- Perfil por dominios (referencia propia, no normativa) ----
         t1s = S["_f1"] - S["_t1"] if "_f1" in S else None
-        h1, h2 = sum(hits[:4]), sum(hits[4:])
+        mid = NF // 2
+        h1, h2 = sum(hits[:mid]), sum(hits[mid:])
         suma = lambda ids: sum(mates_ok[i] for i in ids)
         calc, razon = suma([1, 2, 4, 7]), suma([0, 3, 5, 6])
         vals = [v for v in org.values() if v is not None]
         hizo3 = any(S.get(f"w_c{i}", "").strip() for i in range(4))
         hizo5 = any(S.get(f"w_m{i}", "").strip() for i in range(8))
-        dom = {"Atención sostenida (eficiencia)": max(0, (aciertos - falsos) / 25 * 100) if "_t1" in S else None,
+        dom = {"Atención sostenida (eficiencia)": max(0, (aciertos - falsos) / NA * 100) if "_t1" in S else None,
                "Memoria verbal inmediata": len(recordadas) / 5 * 100 if S.get("_oyo") else None,
                "Seguimiento de instrucciones": len(acciones_ok) / 5 * 100 if b_ap else None,
                "Comprensión lectora": len(compr_ok) / 4 * 100 if hizo3 else None,
@@ -290,9 +406,9 @@ with tab_re:
             st.bar_chart(dd.dropna().set_index("Dominio")["Puntaje %"])
         if "_t1" in S:
             m = st.columns(4)
-            m[0].metric("Omisiones", f"{omisiones / 25:.0%}")
+            m[0].metric("Omisiones", f"{omisiones / NA:.0%}")
             m[1].metric("Falsos positivos", falsos)
-            m[2].metric("Aciertos filas 1-4 vs 5-8", f"{h1} vs {h2}")
+            m[2].metric("Aciertos 1ª vs 2ª mitad", f"{h1} vs {h2}")
             m[3].metric("Tiempo", t1)
 
         # ---- Pistas en respuestas abiertas ----
@@ -308,10 +424,10 @@ with tab_re:
         K = list(AREAS)
         ind = {n: [] for n in K}
         if "_t1" in S:
-            if omisiones >= U["omisiones"]: ind[K[0]].append(f"Omisiones: {omisiones}/25")
+            if omisiones >= U["omisiones"] * NA / 25: ind[K[0]].append(f"Omisiones: {omisiones}/{NA}")
             if falsos >= U["falsos_pos"]: ind[K[0]].append(f"Falsos positivos: {falsos} (posible impulsividad)")
             if h1 - h2 >= U["fatiga"]: ind[K[0]].append(f"El desempeño cae en la segunda mitad ({h1} vs {h2} aciertos)")
-            if t1s is not None and t1s < 60 and omisiones >= U["omisiones"]:
+            if t1s is not None and t1s < 60 and omisiones >= U["omisiones"] * NA / 25:
                 ind[K[0]].append(f"Terminó en {t1s:.0f} s con muchas omisiones (posible impulsividad)")
         if S.get("_oyo") and len(recordadas) <= U["recuerdo"]:
             ind[K[0]].append(f"Recuerdo inmediato bajo: {len(recordadas)}/5")
@@ -332,7 +448,7 @@ with tab_re:
         pal4 = re.findall(r"[a-zñ]+", norm(txt4))
         ttr = len(set(pal4)) / len(pal4) if pal4 else 0
         if txt4.strip():
-            if n_or < 5: ind[K[2]].append(f"Texto breve: {n_or} oraciones (se pedían 5 a 8)")
+            if n_or < ORMIN: ind[K[2]].append(f"Texto breve: {n_or} oraciones (se pedían {ORMIN} a {ORMAX})")
             if len(pal4) >= 30 and ttr < 0.5: ind[K[2]].append(f"Vocabulario repetitivo (diversidad léxica {ttr:.2f})")
             if len(pal4) / max(n_or, 1) > 30: ind[K[2]].append(f"Oraciones muy largas o sin puntuar ({len(pal4) / max(n_or, 1):.0f} palabras por oración)")
         if escr_flag: ind[K[2]].append("Texto poco comprensible o desorganizado (según el profesional)")
@@ -352,7 +468,7 @@ with tab_re:
                 st.markdown("**Por qué aparece:**\n" + "\n".join(f"- {x}" for x in indicios))
                 st.markdown(f"**Criterios y cómo confirmar:** {AREAS[n][0]}")
                 st.markdown(f"**Descartar primero:** {AREAS[n][1]}")
-                st.markdown(f"**Valores/pruebas que puedes aplicar:** {AREAS[n][2]}")
+                st.markdown(f"**Valores/pruebas que puedes aplicar:** {V["pruebas"][K.index(n)]}")
         if pistas:
             st.markdown("**Pistas en sus respuestas abiertas** (para explorar en entrevista)")
             for k, v in pistas.items():
@@ -365,16 +481,16 @@ with tab_re:
         obs = st.text_area("Observaciones del aplicador (atención, conducta, fortalezas, factores que influyeron)", key="v_obs")
         apoyos = st.multiselect("Apoyos inmediatos que se probarán", APOYOS, key="v_apoyos")
 
-        L = ["# Reporte de exploración educativa", f"Nombre: {nombre} · Edad: {edad} · Fecha: {fecha} · Aplicador(a): {aplic}",
+        L = ["# Reporte de exploración educativa", f"Nombre: {nombre} · Edad: {edad} · Versión: {V['nombre']} · Fecha: {fecha} · Aplicador(a): {aplic}",
              "", "## Resultados"] + [f"- **{r.Actividad}**: {r.Resultado}" for r in resumen.itertuples()]
         L += ["", "## Perfil por dominios (referencia no normativa)"] + [f"- {r['Dominio']}: {r['Puntaje %']} ({r['Lectura descriptiva']})" for _, r in dd.iterrows()]
         L += ["", "## Actividad 4", txt4 or "-", "", "## Actividad 6"] + [f"- {t}: {v}" for t, v in org.items()]
         L += ["", f"Le ayuda: {S.get('w_ayuda') or '-'}", f"Le dificulta: {S.get('w_dif') or '-'}", "", "## Observaciones", obs or "-", "",
               "## Áreas a explorar (hipótesis de trabajo)"]
         for n, indicios in areas:
-            L += [f"### {n} (indicio {niv(n).lower()})"] + [f"- {x}" for x in indicios] + [f"Criterios: {AREAS[n][0]}", f"Descartar primero: {AREAS[n][1]}", f"Pruebas sugeridas: {AREAS[n][2]}", ""]
+            L += [f"### {n} (indicio {niv(n).lower()})"] + [f"- {x}" for x in indicios] + [f"Criterios: {AREAS[n][0]}", f"Descartar primero: {AREAS[n][1]}", f"Pruebas sugeridas: {V["pruebas"][K.index(n)]}", ""]
         L += ["## Apoyos"] + ([f"- {a}" for a in apoyos] or ["-"])
-        fila = {"nombre": nombre, "edad": edad, "fecha": str(fecha), "a1_aciertos": aciertos, "a1_omisiones": omisiones,
+        fila = {"version": V["nombre"], "nombre": nombre, "edad": edad, "fecha": str(fecha), "a1_aciertos": aciertos, "a1_omisiones": omisiones,
                 "a1_falsos_positivos": falsos, "a2a": len(recordadas), "a2b": len(acciones_ok), "a3": len(compr_ok),
                 "a5": sum(mates_ok), **{f"a6_{i + 1}": v for i, v in enumerate(org.values())},
                 "areas_a_explorar": " | ".join(n for n, _ in areas)}
