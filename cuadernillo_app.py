@@ -3,6 +3,7 @@ import re
 import time
 import unicodedata
 import zlib
+from urllib.parse import quote
 
 import pandas as pd
 import streamlit as st
@@ -157,12 +158,7 @@ VERS = {
         "p_orac": "Escribe de 3 a 5 oraciones sobre tu mejor día.",
         "p_ayuda": "¿Qué te ayuda a concentrarte o a terminar tus tareas?",
         "p_dif": "¿Hay algo que te cuesta trabajo en la escuela y que quisieras que tu maestro supiera?",
-        "pruebas": ["Conners 3 (padres y docentes; 6 a 18 años); prueba de ejecución continua (CPT); d2 (desde 8 años); Stroop infantil; WISC-V: Memoria de Trabajo y Velocidad de Procesamiento",
-                    "PROLEC-R (lectura, 6 a 12 años); WIAT-III o Woodcock-Muñoz (lectura); WISC-V: Comprensión Verbal",
-                    "PROESC (escritura, 8 a 15 años); WIAT-III o Woodcock-Muñoz (expresión escrita); muestra manuscrita",
-                    "WIAT-III o Woodcock-Muñoz (matemáticas); TEDI-MATH (hasta 8 años); WISC-V: Razonamiento Fluido y Memoria de Trabajo",
-                    "WISC-V: Retención de Dígitos y Memoria de Trabajo; audiometría; valoración del lenguaje",
-                    "BRIEF-2 (padres y docentes); ENFEN (6 a 12 años); Stroop infantil"]},
+        "tests": [['Conners 3', 'CPT', 'd2', 'Stroop', 'WISC-V'], ['PROLEC-R', 'WIAT-III', 'Woodcock-Muñoz', 'WISC-V'], ['PROESC', 'WIAT-III', 'Woodcock-Muñoz'], ['WIAT-III', 'Woodcock-Muñoz', 'TEDI-MATH', 'WISC-V'], ['WISC-V', 'Audiometría', 'Valoración del lenguaje'], ['BRIEF-2', 'ENFEN', 'Stroop']]},
     "adol": {
         "nombre": "Adolescencia (12 a 15 años)", "tiempo": 120, "orac": (5, 8), "filas": FILAS, "palabras": PALABRAS,
         "acciones": ACCIONES, "texto": TEXTO, "comp": COMP, "mates": MATES, "org": ORG,
@@ -171,12 +167,7 @@ VERS = {
         "p_orac": "Escribe un texto de 5 a 8 oraciones sobre una situación en la que tuviste que resolver un problema.",
         "p_ayuda": "¿Qué te ayuda a concentrarte o terminar tus tareas?",
         "p_dif": "¿Hay algo que te dificulte aprender o participar en clase y que quisieras que la escuela supiera?",
-        "pruebas": ["Conners 3 (padres, docentes, autoinforme); prueba de ejecución continua (CPT); d2 (atención selectiva); Stroop; WISC-V: Memoria de Trabajo y Velocidad de Procesamiento",
-                    "PROLEC-SE-R (lectura en secundaria); WIAT-III o Woodcock-Muñoz (lectura); WISC-V: Comprensión Verbal",
-                    "PROESC (procesos de escritura); WIAT-III o Woodcock-Muñoz (expresión escrita); muestra manuscrita",
-                    "WIAT-III o Woodcock-Muñoz (matemáticas); WISC-V: Razonamiento Fluido y Memoria de Trabajo",
-                    "WISC-V: Retención de Dígitos y Memoria de Trabajo; audiometría; valoración del lenguaje",
-                    "BRIEF-2 (padres, docentes, autoinforme); ENFEN (6 a 12 años); Stroop"]},
+        "tests": [['Conners 3', 'CPT', 'd2', 'Stroop', 'WISC-V'], ['PROLEC-SE-R', 'WIAT-III', 'Woodcock-Muñoz', 'WISC-V'], ['PROESC', 'WIAT-III', 'Woodcock-Muñoz'], ['WIAT-III', 'Woodcock-Muñoz', 'WISC-V'], ['WISC-V', 'Audiometría', 'Valoración del lenguaje'], ['BRIEF-2', 'Stroop']]},
     "adulto": {
         "nombre": "Adultos (16 años o más)", "tiempo": 120, "orac": (8, 12),
         "filas": _r("V A H R K A N X V A R H K A", "K H A V R N A H X A K V R N", "N R V A H K X A R V A H N K",
@@ -212,13 +203,70 @@ VERS = {
         "p_orac": "Escribe un texto de 8 a 12 oraciones sobre una situación reciente de estudio, trabajo o vida diaria en la que tuviste que resolver un problema.",
         "p_ayuda": "¿Qué te ayuda a concentrarte o a terminar tus pendientes?",
         "p_dif": "¿Hay algo que dificulte tu estudio o trabajo y que quisieras mencionar?",
-        "pruebas": ["ASRS y CAARS (18 años o más; Conners 3 para 16 y 17 años); CPT; d2; Stroop; WAIS-IV: Memoria de Trabajo y Velocidad de Procesamiento",
-                    "WIAT-III o Woodcock-Muñoz (lectura); WAIS-IV: Comprensión Verbal",
-                    "WIAT-III o Woodcock-Muñoz (expresión escrita); muestra de escritura",
-                    "WIAT-III o Woodcock-Muñoz (matemáticas); WAIS-IV: Razonamiento Matricial y Aritmética",
-                    "WAIS-IV: Retención de Dígitos y Memoria de Trabajo; audiometría; valoración del lenguaje",
-                    "BRIEF-A (18 años o más; BRIEF-2 para 16 y 17); Stroop; Torre de Londres"]},
+        "tests": [['ASRS', 'CAARS', 'Conners 3', 'CPT', 'd2', 'Stroop', 'WAIS-IV'], ['WIAT-III', 'Woodcock-Muñoz', 'WAIS-IV'], ['WIAT-III', 'Woodcock-Muñoz'], ['WIAT-III', 'Woodcock-Muñoz', 'WAIS-IV'], ['WAIS-IV', 'Audiometría', 'Valoración del lenguaje'], ['BRIEF-A', 'BRIEF-2', 'Stroop', 'Torre de Londres']]},
 }
+
+FICHAS = {
+    "Conners 3": ("Síntomas de TDAH y problemas asociados (conducta, aprendizaje, ansiedad)", "6 a 18 años", "Padres, docentes y autoinforme (desde 8 años)", "Licencia comercial; requiere formación"),
+    "CPT": ("Atención sostenida, impulsividad y tiempo de reacción en computadora", "Desde 6 años, según la versión", "Lo aplica el profesional", "Licencia comercial (hay varias versiones)"),
+    "d2": ("Atención selectiva y concentración sostenida (tachado de letras)", "Desde 8 años", "Lo aplica el profesional (unos 8 min, en papel)", "Licencia comercial"),
+    "Stroop": ("Control inhibitorio, atención y flexibilidad", "Versiones infantil y adulta", "Lo aplica el profesional (unos 5 min)", "Licencia comercial"),
+    "WISC-V": ("Perfil cognitivo: Comprensión Verbal, Visoespacial, Razonamiento Fluido, Memoria de Trabajo y Velocidad de Procesamiento", "6 a 16 años 11 meses", "Lo aplica un psicólogo (60 a 90 min)", "Licencia comercial; uso restringido a psicólogos"),
+    "WAIS-IV": ("Perfil cognitivo: Comprensión Verbal, Razonamiento Perceptual, Memoria de Trabajo y Velocidad de Procesamiento", "16 a 90 años", "Lo aplica un psicólogo (60 a 90 min)", "Licencia comercial; uso restringido a psicólogos"),
+    "PROLEC-R": ("Procesos lectores: decodificación y comprensión", "6 a 12 años", "Lo aplica el profesional", "Licencia comercial"),
+    "PROLEC-SE-R": ("Procesos lectores en secundaria y bachillerato", "12 a 16 años", "Lo aplica el profesional", "Licencia comercial"),
+    "PROESC": ("Procesos de escritura: ortografía, reglas y composición", "8 a 15 años", "Lo aplica el profesional", "Licencia comercial"),
+    "WIAT-III": ("Aprovechamiento: lectura, escritura, matemáticas y lenguaje oral", "4 a 50 años", "Lo aplica el profesional", "Licencia comercial"),
+    "Woodcock-Muñoz": ("Batería de aprovechamiento y habilidades cognitivas en español", "Desde 2 años hasta adultos", "Lo aplica el profesional", "Licencia comercial"),
+    "TEDI-MATH": ("Competencias numéricas básicas", "4 a 8 años", "Lo aplica el profesional", "Licencia comercial"),
+    "BRIEF-2": ("Funciones ejecutivas en la vida diaria", "5 a 18 años", "Padres, docentes y autoinforme (desde 11 años)", "Licencia comercial"),
+    "BRIEF-A": ("Funciones ejecutivas en adultos", "18 a 90 años", "Autoinforme e informante cercano", "Licencia comercial"),
+    "ENFEN": ("Funciones ejecutivas: fluidez, atención, planificación e inhibición", "6 a 12 años", "Lo aplica el profesional", "Licencia comercial"),
+    "ASRS": ("Cribado de síntomas de TDAH en adultos (OMS)", "18 años o más", "Autoinforme", "Cribado: no diagnostica; consulta los términos de uso"),
+    "CAARS": ("Síntomas de TDAH en adultos", "18 años o más", "Autoinforme y observador", "Licencia comercial"),
+    "Torre de Londres": ("Planificación y resolución de problemas", "Versiones infantil y adulta", "Lo aplica el profesional", "Licencia comercial"),
+    "Audiometría": ("Descartar pérdida auditiva", "Todas las edades", "Audiólogo o profesional de salud auditiva", "Servicio de salud"),
+    "Valoración del lenguaje": ("Lenguaje comprensivo y expresivo", "Según la edad", "Psicólogo o terapeuta del lenguaje", "Según el instrumento elegido"),
+    "SDQ": ("Fortalezas y dificultades emocionales y conductuales", "4 a 17 años", "Padres, docentes y autoinforme (desde 11 años)", "Uso gratuito con condiciones del autor; consulta sus términos"),
+    "CBCL": ("Problemas emocionales y conductuales", "6 a 18 años", "Padres", "Licencia comercial (ASEBA)"),
+}
+OPC = {0: "Para nada", 1: "Varios días", 2: "Más de la mitad de los días", 3: "Casi todos los días"}
+PHQ9 = ["Poco interés o placer en hacer las cosas", "Se ha sentido decaído(a), deprimido(a) o sin esperanzas",
+        "Dificultad para quedarse o permanecer dormido(a), o ha dormido demasiado", "Se ha sentido cansado(a) o con poca energía",
+        "Con poco apetito o ha comido en exceso",
+        "Se ha sentido mal consigo mismo(a), o que es un fracaso, o que ha quedado mal con usted mismo(a) o con su familia",
+        "Dificultad para concentrarse en cosas como leer o ver televisión",
+        "Se ha movido o hablado tan lentamente que otras personas podrían notarlo, o al contrario, ha estado tan inquieto(a) que se ha movido mucho más de lo normal",
+        "Pensamientos de que estaría mejor muerto(a) o de lastimarse de alguna manera"]
+GAD7 = ["Se ha sentido nervioso(a), ansioso(a) o con los nervios de punta", "No ha podido dejar de preocuparse o controlar la preocupación",
+        "Se ha preocupado demasiado por motivos diferentes", "Ha tenido dificultad para relajarse",
+        "Se ha sentido tan inquieto(a) que no ha podido quedarse quieto(a)", "Se ha molestado o irritado fácilmente",
+        "Ha sentido miedo como si algo terrible fuera a pasar"]
+R_PHQ = [(4, "mínimo"), (9, "leve"), (14, "moderado"), (19, "moderadamente grave"), (27, "grave")]
+R_GAD = [(4, "mínimo"), (9, "leve"), (14, "moderado"), (21, "grave")]
+
+
+def ficha(t):
+    mide, edad_, quien, disp = FICHAS[t]
+    with st.expander(f"🔒 {t}"):
+        st.markdown(f"**Mide:** {mide}  \n**Edades:** {edad_}  \n**Quién responde:** {quien}  \n**Disponibilidad:** {disp}")
+        st.link_button("Buscar información y dónde obtenerla", "https://www.google.com/search?q=" + quote(f"{t} prueba psicológica"))
+
+
+def aplicar(nombre, items, pref, rangos):
+    with st.expander(f"🟢 {nombre} · aplicar aquí"):
+        st.caption("Durante las últimas 2 semanas, ¿con qué frecuencia le han molestado los siguientes problemas?")
+        vals = [st.radio(t, list(OPC), index=None, format_func=lambda v: OPC[v], horizontal=True, key=f"{pref}{i}")
+                for i, t in enumerate(items)]
+        n = sum(v is not None for v in vals)
+        if n < len(items):
+            st.info(f"Respondidas {n} de {len(items)}")
+            return None
+        total = sum(vals)
+        nivel = next(nv for lim, nv in rangos if total <= lim)
+        st.markdown(f"**Puntaje: {total} · {nivel}**")
+        return total, nivel, vals
+
 
 tab_ev, tab_re = st.tabs(["📝 Evaluación", "📊 Resultados"])
 
@@ -464,11 +512,14 @@ with tab_re:
                    "(1 débil, 2 moderado, 3 o más fuerte). Este cuadernillo no evalúa ansiedad, depresión, TEA, lenguaje ni capacidad intelectual.")
         st.table(pd.DataFrame({"Área": K, "Indicio": [niv(n) for n in K], "Coincidencias": [len(ind[n]) for n in K]}))
         for n, indicios in areas:
-            with st.expander(f"{n} · {niv(n)}", expanded=len(indicios) >= 2):
+            with st.container(border=True):
+                st.markdown(f"##### {n} · {niv(n)}")
                 st.markdown("**Por qué aparece:**\n" + "\n".join(f"- {x}" for x in indicios))
                 st.markdown(f"**Criterios y cómo confirmar:** {AREAS[n][0]}")
                 st.markdown(f"**Descartar primero:** {AREAS[n][1]}")
-                st.markdown(f"**Valores/pruebas que puedes aplicar:** {V["pruebas"][K.index(n)]}")
+                st.markdown("**Pruebas recomendadas** (abre una para ver su ficha)")
+                for t in V["tests"][K.index(n)]:
+                    ficha(t)
         if pistas:
             st.markdown("**Pistas en sus respuestas abiertas** (para explorar en entrevista)")
             for k, v in pistas.items():
@@ -476,6 +527,25 @@ with tab_re:
             if "Emocional / social" in pistas:
                 st.caption("Para lo emocional y conductual se sugiere SDQ o CBCL con padres y docentes.")
         st.caption("Verifica edad, baremos para México y licencias de cada prueba antes de usarla.")
+
+        st.markdown("#### Tamizaje emocional (gratuito, se aplica aquí)")
+        res_emo = []
+        if edad >= 12:
+            st.caption("El cuadernillo no evalúa ánimo ni ansiedad. PHQ-9 y GAD-7 son escalas de dominio público para adultos; "
+                       "de 12 a 17 años úsalas solo como exploración y confirma con instrumentos para adolescentes.")
+            r = aplicar("PHQ-9 (depresión)", PHQ9, "v_p9_", R_PHQ)
+            if r:
+                res_emo.append(f"- PHQ-9: {r[0]} ({r[1]})")
+                if r[2][8] > 0:
+                    st.error("El ítem 9 tiene respuesta mayor que 0: valora el riesgo de forma directa y sigue tu protocolo de intervención en crisis.")
+                    res_emo.append("- PHQ-9 ítem 9 mayor que 0: valorar riesgo de inmediato")
+            r = aplicar("GAD-7 (ansiedad)", GAD7, "v_g7_", R_GAD)
+            if r:
+                res_emo.append(f"- GAD-7: {r[0]} ({r[1]})")
+        else:
+            st.caption("Para menores de 12 años se sugieren estos cuestionarios con padres y docentes; no se aplican aquí.")
+            ficha("SDQ")
+            ficha("CBCL")
 
         st.markdown("#### Observaciones y apoyos")
         obs = st.text_area("Observaciones del aplicador (atención, conducta, fortalezas, factores que influyeron)", key="v_obs")
@@ -488,7 +558,9 @@ with tab_re:
         L += ["", f"Le ayuda: {S.get('w_ayuda') or '-'}", f"Le dificulta: {S.get('w_dif') or '-'}", "", "## Observaciones", obs or "-", "",
               "## Áreas a explorar (hipótesis de trabajo)"]
         for n, indicios in areas:
-            L += [f"### {n} (indicio {niv(n).lower()})"] + [f"- {x}" for x in indicios] + [f"Criterios: {AREAS[n][0]}", f"Descartar primero: {AREAS[n][1]}", f"Pruebas sugeridas: {V["pruebas"][K.index(n)]}", ""]
+            L += [f"### {n} (indicio {niv(n).lower()})"] + [f"- {x}" for x in indicios] + [f"Criterios: {AREAS[n][0]}", f"Descartar primero: {AREAS[n][1]}", "Pruebas sugeridas: " + ", ".join(V["tests"][K.index(n)]), ""]
+        if res_emo:
+            L += ["## Tamizaje emocional"] + res_emo + [""]
         L += ["## Apoyos"] + ([f"- {a}" for a in apoyos] or ["-"])
         fila = {"version": V["nombre"], "nombre": nombre, "edad": edad, "fecha": str(fecha), "a1_aciertos": aciertos, "a1_omisiones": omisiones,
                 "a1_falsos_positivos": falsos, "a2a": len(recordadas), "a2b": len(acciones_ok), "a3": len(compr_ok),
