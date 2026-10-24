@@ -9,6 +9,12 @@ import pandas as pd
 import streamlit as st
 import streamlit.components.v1 as components
 
+try:
+    from docx import Document
+    from docx.shared import Pt
+except ImportError:  # falta python-docx en requirements.txt
+    Document = None
+
 st.set_page_config(page_title="Cuadernillo de exploración educativa", page_icon="📋", layout="centered")
 try:
     PIN = str(st.secrets["PIN"])
@@ -266,6 +272,71 @@ def aplicar(nombre, items, pref, rangos):
         nivel = next(nv for lim, nv in rangos if total <= lim)
         st.markdown(f"**Puntaje: {total} · {nivel}**")
         return total, nivel, vals
+
+
+def _tabla(doc, enc, filas):
+    t = doc.add_table(rows=1, cols=len(enc))
+    t.style = "Light Grid Accent 1"
+    for c, h in zip(t.rows[0].cells, enc):
+        c.text = h
+    for f in filas:
+        for c, v in zip(t.add_row().cells, f):
+            c.text = str(v)
+    doc.add_paragraph()
+
+
+def _etiqueta(doc, etiqueta, texto):
+    p = doc.add_paragraph()
+    p.add_run(etiqueta + " ").bold = True
+    p.add_run(texto)
+
+
+def crear_docx(d):
+    doc = Document()
+    doc.styles["Normal"].font.name = "Calibri"
+    doc.styles["Normal"].font.size = Pt(11)
+    doc.add_heading("Reporte de exploración educativa", 0)
+    t = doc.add_table(rows=0, cols=2)
+    t.style = "Light Grid Accent 1"
+    for k, v in d["datos"]:
+        c = t.add_row().cells
+        c[0].text, c[1].text = k, str(v)
+    doc.add_heading("Resumen", 1)
+    for x in d["resumen"]:
+        doc.add_paragraph(x)
+    doc.add_heading("Resultados por actividad", 1)
+    _tabla(doc, ["Actividad", "Resultado"], d["resultados"])
+    doc.add_heading("Perfil por dominios", 1)
+    doc.add_paragraph("Referencia propia y no normativa (menos de 40 bajo, 40 a 69 medio, 70 o más adecuado).")
+    _tabla(doc, ["Dominio", "Puntaje", "Lectura"], d["dominios"])
+    doc.add_heading("Actividad 4. Texto del estudiante", 1)
+    doc.add_paragraph(d["txt4"] or "-")
+    doc.add_heading("Actividad 6. Organización de tareas", 1)
+    _tabla(doc, ["Conducta", "Frecuencia"], d["org"])
+    _etiqueta(doc, "Le ayuda:", d["ayuda"] or "-")
+    _etiqueta(doc, "Le dificulta:", d["dif"] or "-")
+    doc.add_heading("Áreas a explorar (hipótesis de trabajo)", 1)
+    if not d["areas"]:
+        doc.add_paragraph("Sin áreas que cumplan los criterios. Esto no descarta nada.")
+    for a in d["areas"]:
+        doc.add_heading(f"{a['n']} · indicio {a['niv']}", 2)
+        for x in a["indicios"]:
+            doc.add_paragraph(x, style="List Bullet")
+        _etiqueta(doc, "Criterios:", a["criterios"])
+        _etiqueta(doc, "Descartar primero:", a["descartar"])
+        _etiqueta(doc, "Pruebas sugeridas:", a["pruebas"])
+    if d["emo"]:
+        doc.add_heading("Tamizaje emocional", 1)
+        for x in d["emo"]:
+            doc.add_paragraph(x, style="List Bullet")
+    doc.add_heading("Observaciones del aplicador", 1)
+    doc.add_paragraph(d["obs"] or "-")
+    doc.add_heading("Apoyos que se probarán", 1)
+    for x in d["apoyos"] or ["-"]:
+        doc.add_paragraph(x, style="List Bullet")
+    buf = io.BytesIO()
+    doc.save(buf)
+    return buf.getvalue()
 
 
 tab_ev, tab_re = st.tabs(["📝 Evaluación", "📊 Resultados"])
@@ -551,23 +622,28 @@ with tab_re:
         obs = st.text_area("Observaciones del aplicador (atención, conducta, fortalezas, factores que influyeron)", key="v_obs")
         apoyos = st.multiselect("Apoyos inmediatos que se probarán", APOYOS, key="v_apoyos")
 
-        L = ["# Reporte de exploración educativa", f"Nombre: {nombre} · Edad: {edad} · Versión: {V['nombre']} · Fecha: {fecha} · Aplicador(a): {aplic}",
-             "", "## Resultados"] + [f"- **{r.Actividad}**: {r.Resultado}" for r in resumen.itertuples()]
-        L += ["", "## Perfil por dominios (referencia no normativa)"] + [f"- {r['Dominio']}: {r['Puntaje %']} ({r['Lectura descriptiva']})" for _, r in dd.iterrows()]
-        L += ["", "## Actividad 4", txt4 or "-", "", "## Actividad 6"] + [f"- {t}: {v}" for t, v in org.items()]
-        L += ["", f"Le ayuda: {S.get('w_ayuda') or '-'}", f"Le dificulta: {S.get('w_dif') or '-'}", "", "## Observaciones", obs or "-", "",
-              "## Áreas a explorar (hipótesis de trabajo)"]
-        for n, indicios in areas:
-            L += [f"### {n} (indicio {niv(n).lower()})"] + [f"- {x}" for x in indicios] + [f"Criterios: {AREAS[n][0]}", f"Descartar primero: {AREAS[n][1]}", "Pruebas sugeridas: " + ", ".join(V["tests"][K.index(n)]), ""]
+        bajos = [r["Dominio"] for _, r in dd.iterrows() if r["Lectura descriptiva"] == "Bajo"]
+        res = [f"{nombre or 'El evaluado'} ({edad} años) respondió la versión «{V['nombre']}» el {fecha}."]
+        res.append("Áreas con indicios para explorar: " + ", ".join(f"{n} (indicio {niv(n).lower()})" for n, _ in areas) + "."
+                   if areas else "Ninguna área cumplió los criterios de indicio; esto no descarta nada.")
+        if bajos:
+            res.append("Dominios con puntaje bajo (referencia no normativa): " + ", ".join(bajos) + ".")
         if res_emo:
-            L += ["## Tamizaje emocional"] + res_emo + [""]
-        L += ["## Apoyos"] + ([f"- {a}" for a in apoyos] or ["-"])
-        fila = {"version": V["nombre"], "nombre": nombre, "edad": edad, "fecha": str(fecha), "a1_aciertos": aciertos, "a1_omisiones": omisiones,
-                "a1_falsos_positivos": falsos, "a2a": len(recordadas), "a2b": len(acciones_ok), "a3": len(compr_ok),
-                "a5": sum(mates_ok), **{f"a6_{i + 1}": v for i, v in enumerate(org.values())},
-                "areas_a_explorar": " | ".join(n for n, _ in areas)}
-        buf = io.StringIO()
-        pd.DataFrame([fila]).to_csv(buf, index=False)
-        d1, d2 = st.columns(2)
-        d1.download_button("Descargar reporte (.md)", "\n".join(L), f"reporte_{nombre or 'estudiante'}.md")
-        d2.download_button("Descargar fila CSV (Excel)", buf.getvalue(), f"datos_{nombre or 'estudiante'}.csv")
+            res.append("Tamizaje emocional: " + "; ".join(x.lstrip("- ") for x in res_emo) + ".")
+        res.append("Este resumen reúne hipótesis de trabajo para el criterio del profesional; no es un diagnóstico.")
+        d = {"datos": [("Nombre", nombre or "-"), ("Edad", f"{edad} años"), ("Versión aplicada", V["nombre"]),
+                       ("Fecha de aplicación", str(fecha)), ("Aplicador(a)", aplic or "-")],
+             "resumen": res,
+             "resultados": [(r.Actividad, r.Resultado) for r in resumen.itertuples()],
+             "dominios": [(r["Dominio"], "sin evaluar" if pd.isna(r["Puntaje %"]) else f"{int(r['Puntaje %'])} %", r["Lectura descriptiva"])
+                          for _, r in dd.iterrows()],
+             "txt4": txt4, "ayuda": S.get("w_ayuda"), "dif": S.get("w_dif"),
+             "org": [(t, "sin responder" if v is None else NIV[v]) for t, v in org.items()],
+             "areas": [{"n": n, "niv": niv(n).lower(), "indicios": ind_, "criterios": AREAS[n][0], "descartar": AREAS[n][1],
+                        "pruebas": ", ".join(V["tests"][K.index(n)])} for n, ind_ in areas],
+             "emo": [x.lstrip("- ") for x in res_emo], "obs": obs, "apoyos": apoyos}
+        if Document is None:
+            st.warning("Para descargar el reporte en Word agrega python-docx al archivo requirements.txt.")
+        else:
+            st.download_button("⬇ Descargar reporte (Word)", crear_docx(d), f"reporte_{nombre or 'estudiante'}.docx",
+                               mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
