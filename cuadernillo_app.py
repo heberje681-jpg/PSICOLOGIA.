@@ -233,6 +233,11 @@ FICHAS = {
     "Torre de Londres": ("Planificación y resolución de problemas", "Versiones infantil y adulta", "Lo aplica el profesional", "Licencia comercial"),
     "Audiometría": ("Descartar pérdida auditiva", "Todas las edades", "Audiólogo o profesional de salud auditiva", "Servicio de salud"),
     "Valoración del lenguaje": ("Lenguaje comprensivo y expresivo", "Según la edad", "Psicólogo o terapeuta del lenguaje", "Según el instrumento elegido"),
+    "NPI": ("Rasgos narcisistas en población general (grandiosidad, liderazgo, vanidad, merecimiento)", "Adultos", "Autoinforme", "Hay versiones breves de uso libre en investigación; verifica términos"),
+    "PNI": ("Narcisismo patológico, grandioso y vulnerable", "Adultos", "Autoinforme", "Se obtiene con los autores; verifica términos"),
+    "PID-5": ("Rasgos patológicos de personalidad del DSM-5 (incluye grandiosidad y búsqueda de atención)", "Desde 18 años (hay versión para 11 a 17)", "Autoinforme", "Disponible gratis en el sitio de la Asociación Americana de Psiquiatría"),
+    "MCMI-IV": ("Inventario clínico de personalidad y síndromes, con escala narcisista", "18 años o más", "Autoinforme", "Licencia comercial; uso restringido a profesionales"),
+    "SCID-5-PD": ("Entrevista clínica estructurada para trastornos de personalidad del DSM-5", "Adultos", "La conduce el clínico", "Licencia; requiere formación clínica"),
     "SDQ": ("Fortalezas y dificultades emocionales y conductuales", "4 a 17 años", "Padres, docentes y autoinforme (desde 11 años)", "Uso gratuito con condiciones del autor; consulta sus términos"),
     "CBCL": ("Problemas emocionales y conductuales", "6 a 18 años", "Padres", "Licencia comercial (ASEBA)"),
 }
@@ -272,6 +277,52 @@ def aplicar(nombre, items, pref, rangos):
         nivel = next(nv for lim, nv in rangos if total <= lim)
         st.markdown(f"**Puntaje: {total} · {nivel}**")
         return total, nivel, vals
+
+
+_G = [("Creo que tengo talentos que la mayoría de las personas no tiene.", 1, 0),
+      ("Me resulta natural pensar que estoy destinado(a) a lograr cosas extraordinarias.", 1.5, 0),
+      ("Suelo exagerar mis logros cuando hablo con otras personas.", 1, 0),
+      ("Reconozco con facilidad que en muchas cosas soy una persona común.", 1, 1)]
+_A = [("Necesito que los demás me admiren para sentirme bien conmigo mismo(a).", 1.5, 0),
+      ("Me incomoda que una reunión gire en torno a otra persona y no a mí.", 1, 0),
+      ("Me gusta ser el centro de atención.", 1, 0),
+      ("Me da igual si los demás reconocen o no lo que hago bien.", 1, 1)]
+_M = [("Merezco un trato especial que otras personas no necesitan.", 1.5, 0),
+      ("Las reglas importan menos para mí que para el resto de la gente.", 1, 0),
+      ("Si alguien me puede ser útil, mantengo la relación aunque no me agrade.", 1.5, 0),
+      ("Me molesta aprovecharme de los demás aunque me convenga.", 1, 1)]
+_E = [("Me cuesta interesarme por los problemas de otras personas cuando no me afectan.", 1.5, 0),
+      ("Me impaciento cuando alguien me cuenta sus dificultades durante mucho tiempo.", 1, 0),
+      ("Los sentimientos de los demás influyen poco en mis decisiones.", 1, 0),
+      ("Noto con facilidad cuando alguien a mi alrededor se siente mal.", 1, 1)]
+_V = [("Una crítica me afecta durante días, aunque no lo demuestre.", 1, 0),
+      ("Siento rabia o vergüenza intensa cuando alguien me supera.", 1, 0),
+      ("Me resulta muy difícil aceptar que me corrijan.", 1, 0),
+      ("Envidio con frecuencia a quienes tienen más éxito que yo.", 1.5, 0)]
+# (subescala, texto, peso, inverso); las dos de control "D" no puntúan
+NARC = [(c, *it) for grp in zip(_G, _A, _M, _E, _V) for c, it in zip("GAMEV", grp)]
+NARC.insert(6, ("D", "Nunca he dicho una mentira, ni siquiera pequeña.", 0, 0))
+NARC.insert(15, ("D", "Jamás me he molestado con alguien de mi familia.", 0, 0))
+SUBN = {"G": "Grandiosidad", "A": "Necesidad de admiración", "M": "Merecimiento y uso de los demás",
+        "E": "Empatía reducida", "V": "Vulnerabilidad a la crítica y envidia"}
+
+
+def lec(v):
+    return "elevado" if v >= 60 else "medio" if v >= 40 else "bajo"
+
+
+def puntuar_narc(resp):
+    num, den = {k: 0.0 for k in "GAMEV"}, {k: 0.0 for k in "GAMEV"}
+    for (c, _, w, inv), v in zip(NARC, resp):
+        if c == "D":
+            continue
+        if v is None:
+            return None
+        num[c] += w * (((6 - v) if inv else v) - 1) / 4
+        den[c] += w
+    pct = {k: num[k] / den[k] * 100 for k in "GAMEV"}
+    pct["T"] = sum(num.values()) / sum(den.values()) * 100
+    return pct
 
 
 def _tabla(doc, enc, filas):
@@ -325,6 +376,10 @@ def crear_docx(d):
         _etiqueta(doc, "Criterios:", a["criterios"])
         _etiqueta(doc, "Descartar primero:", a["descartar"])
         _etiqueta(doc, "Pruebas sugeridas:", a["pruebas"])
+    if d["narc"]:
+        doc.add_heading("Rasgos de autoimagen y relaciones (escala experimental)", 1)
+        for x in d["narc"]:
+            doc.add_paragraph(x, style="List Bullet")
     if d["emo"]:
         doc.add_heading("Tamizaje emocional", 1)
         for x in d["emo"]:
@@ -352,7 +407,7 @@ with tab_ev:
     c2.text_input("Aplicador(a)", key="w_aplicador")
     clave = "ninos" if edad_in < 12 else "adol" if edad_in < 16 else "adulto"
     if S.get("_ver") != clave:  # al cambiar de versión se borran las respuestas anteriores
-        pref = ("w_r", "w_c", "w_m", "w_o", "w_2a", "w_a4", "w_ayuda", "w_dif", "v_")
+        pref = ("w_r", "w_c", "w_m", "w_o", "w_2a", "w_a4", "w_ayuda", "w_dif", "w_q", "v_")
         for k in [k for k in S if k.startswith(pref) or k in ("_t1", "_f1", "_oyo")]:
             del S[k]
         S["_ver"] = clave
@@ -413,6 +468,11 @@ with tab_ev:
         st.radio(t, list(NIV), index=None, format_func=lambda v: f"{v} · {NIV[v]}", horizontal=True, key=f"w_o{i}")
     st.text_area(V["p_ayuda"], key="w_ayuda")
     st.text_area(V["p_dif"], key="w_dif")
+    if edad_in >= 18 and S["_ver"] == "adulto":
+        st.header("Actividad 7. Cómo me veo y cómo me relaciono")
+        st.caption("Indica qué tan de acuerdo estás con cada frase (1 = totalmente en desacuerdo, 5 = totalmente de acuerdo). No hay respuestas buenas ni malas.")
+        for i, (_, texto, _, _) in enumerate(NARC):
+            st.radio(texto, [1, 2, 3, 4, 5], index=None, horizontal=True, key=f"w_q{i}")
     if st.button("✅ Terminé la evaluación", type="primary"):
         st.success("¡Gracias por participar! Avisa a tu aplicador(a).")
 
@@ -618,6 +678,44 @@ with tab_re:
             ficha("SDQ")
             ficha("CBCL")
 
+        narc_txt, narc_res = [], ""
+        if edad >= 18 and S["_ver"] == "adulto":
+            st.markdown("#### Rasgos de autoimagen y relaciones (escala experimental)")
+            st.caption("Escala de elaboración propia basada en los criterios del DSM-5 para narcisismo (grandiosidad, admiración, merecimiento, "
+                       "empatía) y en el modelo grandioso/vulnerable. Sin validación ni baremos: los pesos y los cortes (menos de 40 bajo, "
+                       "40 a 59 medio, 60 o más elevado) son una referencia propia. No diagnostica un trastorno de personalidad: eso requiere entrevista clínica.")
+            resp = [S.get(f"w_q{i}") for i in range(len(NARC))]
+            n_resp = sum(v is not None for v in resp)
+            pct = puntuar_narc(resp) if n_resp else None
+            if n_resp == 0:
+                st.info("No se respondió la actividad 7.")
+            elif pct is None:
+                st.info(f"Respondidas {n_resp} de {len(NARC)}; faltan respuestas para calcular.")
+            else:
+                filas_n = [(SUBN[k], round(pct[k]), lec(pct[k])) for k in "GAMEV"] + [("Total", round(pct["T"]), lec(pct["T"]))]
+                dn = pd.DataFrame(filas_n, columns=["Subescala", "Puntaje %", "Lectura"])
+                st.table(dn)
+                st.bar_chart(dn.set_index("Subescala")["Puntaje %"])
+                elev = [k for k in "GAMEV" if pct[k] >= 60]
+                nivel = "elevados" if pct["T"] >= 60 and len(elev) >= 3 else "moderados" if pct["T"] >= 50 or len(elev) >= 2 else "sin elevación"
+                gran, vul = (pct["G"] + pct["A"] + pct["M"]) / 3, pct["V"]
+                perfil = ("mixto (grandioso y vulnerable)" if gran >= 60 and vul >= 60 else "predominantemente grandioso" if gran >= 60 and vul < 50
+                          else "predominantemente vulnerable" if vul >= 60 and gran < 50 else "sin definir")
+                flags = []
+                dsc = [v for v, it in zip(resp, NARC) if it[0] == "D"]
+                if sum(dsc) / len(dsc) >= 4:
+                    flags.append("Posible deseabilidad social alta (afirma no haber mentido ni molestarse nunca): interpretar con cautela.")
+                if sum(v >= 4 for v in resp) / len(resp) >= 0.8:
+                    flags.append("Posible aquiescencia: respondió casi todo de acuerdo, incluso frases opuestas.")
+                st.markdown(f"**Rasgos {nivel} · perfil {perfil}**")
+                for f in flags:
+                    st.warning(f)
+                narc_txt = [f"{a}: {b} % ({c})" for a, b, c in filas_n] + [f"Rasgos {nivel}; perfil {perfil}"] + flags
+                narc_res = f"total {pct['T']:.0f} % ({lec(pct['T'])}), rasgos {nivel}, perfil {perfil}"
+                st.markdown("**Para confirmar o descartar** (abre una para ver su ficha)")
+                for t in ["NPI", "PNI", "PID-5", "MCMI-IV", "SCID-5-PD"]:
+                    ficha(t)
+
         st.markdown("#### Observaciones y apoyos")
         obs = st.text_area("Observaciones del aplicador (atención, conducta, fortalezas, factores que influyeron)", key="v_obs")
         apoyos = st.multiselect("Apoyos inmediatos que se probarán", APOYOS, key="v_apoyos")
@@ -630,6 +728,8 @@ with tab_re:
             res.append("Dominios con puntaje bajo (referencia no normativa): " + ", ".join(bajos) + ".")
         if res_emo:
             res.append("Tamizaje emocional: " + "; ".join(x.lstrip("- ") for x in res_emo) + ".")
+        if narc_res:
+            res.append("Escala experimental de autoimagen y relaciones (solo orientativa): " + narc_res + ".")
         res.append("Este resumen reúne hipótesis de trabajo para el criterio del profesional; no es un diagnóstico.")
         d = {"datos": [("Nombre", nombre or "-"), ("Edad", f"{edad} años"), ("Versión aplicada", V["nombre"]),
                        ("Fecha de aplicación", str(fecha)), ("Aplicador(a)", aplic or "-")],
@@ -641,7 +741,7 @@ with tab_re:
              "org": [(t, "sin responder" if v is None else NIV[v]) for t, v in org.items()],
              "areas": [{"n": n, "niv": niv(n).lower(), "indicios": ind_, "criterios": AREAS[n][0], "descartar": AREAS[n][1],
                         "pruebas": ", ".join(V["tests"][K.index(n)])} for n, ind_ in areas],
-             "emo": [x.lstrip("- ") for x in res_emo], "obs": obs, "apoyos": apoyos}
+             "emo": [x.lstrip("- ") for x in res_emo], "narc": narc_txt, "obs": obs, "apoyos": apoyos}
         if Document is None:
             st.warning("Para descargar el reporte en Word agrega python-docx al archivo requirements.txt.")
         else:
